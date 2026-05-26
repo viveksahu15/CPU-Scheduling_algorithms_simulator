@@ -1,60 +1,67 @@
 #pragma once
-#include <QString>
-#include <QColor>
+#include "process.h"
 #include <vector>
+#include <QString>
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Process  –  holds all input + computed metrics for one process
+//  Scheduler  –  static factory + all algorithm implementations
+//
+//  Every algorithm receives a copy of the process list and returns a
+//  ScheduleResult (Gantt blocks + computed metrics). This keeps the
+//  algorithms pure and side-effect free.
 // ─────────────────────────────────────────────────────────────────────────────
-struct Process {
-    int    pid          = 0;
-    int    arrivalTime  = 0;
-    int    burstTime    = 0;
-    int    priority     = 0;   // lower number = higher priority
-    int    remainingTime= 0;   // used during preemptive simulation
-    int    startTime    = -1;  // first time process got CPU
 
-    // Computed results
-    int    completionTime  = 0;
-    int    turnaroundTime  = 0;
-    int    waitingTime     = 0;
-    int    responseTime    = 0;
-
-    QString label() const { return QString("P%1").arg(pid); }
+enum class Algorithm {
+    FCFS = 0,
+    SJF_NP,          // Shortest Job First – Non-preemptive
+    SRTF,            // Shortest Remaining Time First – Preemptive
+    PRIORITY_NP,     // Priority – Non-preemptive
+    PRIORITY_P,      // Priority – Preemptive
+    ROUND_ROBIN,     // Round Robin
+    HRRN,            // Highest Response Ratio Next
+    MLQ,             // Multilevel Queue
+    MLFQ,            // Multilevel Feedback Queue
+    LJFS,            // Longest Job First (bonus)
+    EDF              // Earliest Deadline First (bonus – deadline = arrival+burst)
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  GanttBlock  –  one coloured bar on the Gantt chart
-// ─────────────────────────────────────────────────────────────────────────────
-struct GanttBlock {
-    int     pid;        // -1 means idle
-    int     start;
-    int     end;
-    QColor  color;
+struct MLQConfig {
+    int numQueues = 3;
+    // Queue 0 = Round Robin (system), Queue 1 = RR (interactive), Queue 2 = FCFS
+    int rrQuantum = 4;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  ScheduleResult  –  everything returned by a scheduler
-// ─────────────────────────────────────────────────────────────────────────────
-struct ScheduleResult {
-    std::vector<Process>    processes;
-    std::vector<GanttBlock> gantt;
-    double avgWaitingTime     = 0.0;
-    double avgTurnaroundTime  = 0.0;
-    double avgResponseTime    = 0.0;
-    double cpuUtilization     = 0.0;
-    double throughput         = 0.0;
+struct MLFQConfig {
+    int numQueues = 3;
+    int baseQuantum = 2; // Q0=2, Q1=4, Q2=8 … doubles each level
 };
 
-// Palette of distinct process colours (cycles if more than 16 processes)
-inline QColor processColor(int pid) {
-    static const QColor palette[] = {
-        {0xFF,0x6B,0x6B}, {0xFF,0xD9,0x3D}, {0x6B,0xCB,0xFF},
-        {0x6B,0xFF,0xB8}, {0xC7,0x7D,0xFF}, {0xFF,0x9F,0x1C},
-        {0x2E,0xCC,0x71}, {0x3B,0x82,0xF6}, {0xEC,0x4E,0x20},
-        {0x00,0xB4,0xD8}, {0xF7,0x2B,0x85}, {0x90,0xE0,0xEF},
-        {0xFF,0xC8,0xDD}, {0xAD,0xFF,0x2F}, {0xFF,0x7C,0x43},
-        {0xA0,0xC4,0xFF}
-    };
-    return palette[pid % 16];
-}
+class Scheduler {
+public:
+    // ── Main dispatch ──────────────────────────────────────────────────────
+    static ScheduleResult run(Algorithm algo,
+                              std::vector<Process> procs,
+                              int timeQuantum   = 4,
+                              int numQueues     = 3);
+
+    static QString algorithmName(Algorithm a);
+    static QString algorithmDescription(Algorithm a);
+
+private:
+    // ── Individual algorithm implementations ───────────────────────────────
+    static ScheduleResult fcfs        (std::vector<Process> procs);
+    static ScheduleResult sjf_np      (std::vector<Process> procs);
+    static ScheduleResult srtf        (std::vector<Process> procs);
+    static ScheduleResult priority_np (std::vector<Process> procs);
+    static ScheduleResult priority_p  (std::vector<Process> procs);
+    static ScheduleResult round_robin (std::vector<Process> procs, int quantum);
+    static ScheduleResult hrrn        (std::vector<Process> procs);
+    static ScheduleResult mlq         (std::vector<Process> procs, int numQueues, int rrQ);
+    static ScheduleResult mlfq        (std::vector<Process> procs, int numQueues, int baseQ);
+    static ScheduleResult ljfs        (std::vector<Process> procs);
+    static ScheduleResult edf         (std::vector<Process> procs);
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    static void computeMetrics (ScheduleResult& result);
+    static void addGanttBlock  (std::vector<GanttBlock>& gantt, int pid, int start, int end);
+};
