@@ -1,110 +1,68 @@
-#pragma once
-#include <QMainWindow>
-#include <QTableWidget>
-#include <QComboBox>
-#include <QSpinBox>
-#include <QLabel>
-#include <QPushButton>
-#include <QGroupBox>
-#include <QStackedWidget>
-#include <QFrame>
-#include "ganttwidget.h"
-#include "scheduler.h"
+cmake_minimum_required(VERSION 3.20)
+project(CPUSchedulingSimulator VERSION 2.0.0 LANGUAGES CXX)
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  MetricCard  –  a small summary card showing one KPI
-// ─────────────────────────────────────────────────────────────────────────────
-class MetricCard : public QFrame {
-    Q_OBJECT
-public:
-    MetricCard(const QString& title, const QString& icon, QWidget* parent = nullptr);
-    void setValue(const QString& val);
-    void setDarkMode(bool dark);
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-private:
-    QLabel* m_titleLabel;
-    QLabel* m_valueLabel;
-    QLabel* m_iconLabel;
-    bool    m_dark = true;
-    QString m_title;
-    void updateStyle();
-};
+# ── Qt6 auto-tools ───────────────────────────────────────────────────────────
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  MainWindow
-// ─────────────────────────────────────────────────────────────────────────────
-class MainWindow : public QMainWindow {
-    Q_OBJECT
-public:
-    explicit MainWindow(QWidget* parent = nullptr);
-    ~MainWindow() override = default;
+# ── Find Qt6 ─────────────────────────────────────────────────────────────────
+# If Qt6 is not found in PATH, set Qt6_DIR manually, e.g.:
+#   cmake -DQt6_DIR=/path/to/Qt/6.x.x/gcc_64/lib/cmake/Qt6 ..
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
-private slots:
-    void onAddProcess();
-    void onRemoveProcess();
-    void onRunSimulation();
-    void onLoadSample();
-    void onReset();
-    void onAlgorithmChanged(int index);
-    void onToggleDark();
-    void onExportCSV();
-    void onExportComparison();
-    void onAlgorithmInfoClicked();
+# ── Sources ───────────────────────────────────────────────────────────────────
+set(SOURCES
+    main.cpp
+    mainwindow.cpp
+    scheduler.cpp
+    ganttwidget.cpp
+)
 
-private:
-    // ── UI Build helpers ───────────────────────────────────────────────────
-    void buildMenuBar();
-    void buildCentralWidget();
-    QWidget* buildSidebar();
-    QWidget* buildInputPanel();
-    QWidget* buildResultPanel();
-    QWidget* buildComparisonPanel();
-    void     buildMetricCards(QWidget* container);
+set(HEADERS
+    process.h
+    scheduler.h
+    mainwindow.h
+    ganttwidget.h
+)
 
-    // ── Data helpers ───────────────────────────────────────────────────────
-    std::vector<Process> collectProcesses() const;
-    void displayResult(const ScheduleResult& result);
-    void displayComparison();
-    void applyTheme();
-    void setDarkMode(bool dark);
-    QString formatDouble(double d) const;
-    void validateInputs();
+# ── Executable ────────────────────────────────────────────────────────────────
+if(WIN32)
+    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS})
+elseif(APPLE)
+    add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCES} ${HEADERS})
+else()
+    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+endif()
 
-    // ── Widgets ────────────────────────────────────────────────────────────
-    // Sidebar
-    QComboBox*    m_algoCombo      = nullptr;
-    QSpinBox*     m_quantumSpin    = nullptr;
-    QSpinBox*     m_queuesSpin     = nullptr;
-    QLabel*       m_algoDesc       = nullptr;
-    QPushButton*  m_runBtn         = nullptr;
-    QPushButton*  m_sampleBtn      = nullptr;
-    QPushButton*  m_resetBtn       = nullptr;
-    QPushButton*  m_darkBtn        = nullptr;
-    QPushButton*  m_compareBtn     = nullptr;
-    QPushButton*  m_exportBtn      = nullptr;
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
 
-    // Process table
-    QTableWidget* m_processTable   = nullptr;
-    QPushButton*  m_addBtn         = nullptr;
-    QPushButton*  m_removeBtn      = nullptr;
+# ── Compiler warnings ─────────────────────────────────────────────────────────
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W3)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
-    // Results panel
-    QStackedWidget* m_stack        = nullptr;
-    GanttWidget*  m_gantt          = nullptr;
-    QTableWidget* m_resultsTable   = nullptr;
-    QLabel*       m_algoHeader     = nullptr;
+# ── Installation ──────────────────────────────────────────────────────────────
+install(TARGETS ${PROJECT_NAME}
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
-    // Metric cards
-    MetricCard*   m_cardAvgWT      = nullptr;
-    MetricCard*   m_cardAvgTAT     = nullptr;
-    MetricCard*   m_cardAvgRT      = nullptr;
-    MetricCard*   m_cardCPU        = nullptr;
-    MetricCard*   m_cardThroughput = nullptr;
-
-    // Comparison table
-    QTableWidget* m_compTable      = nullptr;
-
-    // State
-    bool          m_darkMode       = true;
-    ScheduleResult m_lastResult;
-};
+# ── Qt deployment (Windows: windeployqt) ──────────────────────────────────────
+if(WIN32)
+    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+    get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+    find_program(WINDEPLOYQT windeployqt HINTS "${QT_BIN_DIR}")
+    if(WINDEPLOYQT)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${WINDEPLOYQT}"
+            "$<TARGET_FILE:${PROJECT_NAME}>"
+            COMMENT "Running windeployqt..."
+        )
+    endif()
+endif()
