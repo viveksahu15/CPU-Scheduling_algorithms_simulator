@@ -136,16 +136,3 @@ Then: `qmake && make`
 
 No third-party libraries beyond Qt6 are required.
 
----
-
-## 🏗 Extending the Project
-
-To add a new algorithm:
-1. Add an enum value in `scheduler.h` → `Algorithm`
-2. Add a `static ScheduleResult myAlgo(...)` declaration in `scheduler.h`
-3. Implement it in `scheduler.cpp` (follow the FCFS template — ~30 lines)
-4. Add a `case` in `Scheduler::run()` dispatch
-5. Add a `case` in `algorithmName()` and `algorithmDescription()`
-6. Add the combo-box item string in `MainWindow::buildSidebar()`
-
-That's it — the Gantt, metrics, and comparison table update automatically.
