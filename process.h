@@ -1,68 +1,60 @@
-cmake_minimum_required(VERSION 3.20)
-project(CPUSchedulingSimulator VERSION 2.0.0 LANGUAGES CXX)
+#pragma once
+#include <QString>
+#include <QColor>
+#include <vector>
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+// ─────────────────────────────────────────────────────────────────────────────
+//  Process  –  holds all input + computed metrics for one process
+// ─────────────────────────────────────────────────────────────────────────────
+struct Process {
+    int    pid          = 0;
+    int    arrivalTime  = 0;
+    int    burstTime    = 0;
+    int    priority     = 0;   // lower number = higher priority
+    int    remainingTime= 0;   // used during preemptive simulation
+    int    startTime    = -1;  // first time process got CPU
 
-# ── Qt6 auto-tools ───────────────────────────────────────────────────────────
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
+    // Computed results
+    int    completionTime  = 0;
+    int    turnaroundTime  = 0;
+    int    waitingTime     = 0;
+    int    responseTime    = 0;
 
-# ── Find Qt6 ─────────────────────────────────────────────────────────────────
-# If Qt6 is not found in PATH, set Qt6_DIR manually, e.g.:
-#   cmake -DQt6_DIR=/path/to/Qt/6.x.x/gcc_64/lib/cmake/Qt6 ..
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+    QString label() const { return QString("P%1").arg(pid); }
+};
 
-# ── Sources ───────────────────────────────────────────────────────────────────
-set(SOURCES
-    main.cpp
-    mainwindow.cpp
-    scheduler.cpp
-    ganttwidget.cpp
-)
+// ─────────────────────────────────────────────────────────────────────────────
+//  GanttBlock  –  one coloured bar on the Gantt chart
+// ─────────────────────────────────────────────────────────────────────────────
+struct GanttBlock {
+    int     pid;        // -1 means idle
+    int     start;
+    int     end;
+    QColor  color;
+};
 
-set(HEADERS
-    process.h
-    scheduler.h
-    mainwindow.h
-    ganttwidget.h
-)
+// ─────────────────────────────────────────────────────────────────────────────
+//  ScheduleResult  –  everything returned by a scheduler
+// ─────────────────────────────────────────────────────────────────────────────
+struct ScheduleResult {
+    std::vector<Process>    processes;
+    std::vector<GanttBlock> gantt;
+    double avgWaitingTime     = 0.0;
+    double avgTurnaroundTime  = 0.0;
+    double avgResponseTime    = 0.0;
+    double cpuUtilization     = 0.0;
+    double throughput         = 0.0;
+};
 
-# ── Executable ────────────────────────────────────────────────────────────────
-if(WIN32)
-    add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS})
-elseif(APPLE)
-    add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCES} ${HEADERS})
-else()
-    add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
-endif()
-
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
-
-# ── Compiler warnings ─────────────────────────────────────────────────────────
-if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W3)
-else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
-# ── Installation ──────────────────────────────────────────────────────────────
-install(TARGETS ${PROJECT_NAME}
-    BUNDLE  DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
-# ── Qt deployment (Windows: windeployqt) ──────────────────────────────────────
-if(WIN32)
-    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
-    get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
-    find_program(WINDEPLOYQT windeployqt HINTS "${QT_BIN_DIR}")
-    if(WINDEPLOYQT)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND "${WINDEPLOYQT}"
-            "$<TARGET_FILE:${PROJECT_NAME}>"
-            COMMENT "Running windeployqt..."
-        )
-    endif()
-endif()
+// Palette of distinct process colours (cycles if more than 16 processes)
+inline QColor processColor(int pid) {
+    static const QColor palette[] = {
+        {0xFF,0x6B,0x6B}, {0xFF,0xD9,0x3D}, {0x6B,0xCB,0xFF},
+        {0x6B,0xFF,0xB8}, {0xC7,0x7D,0xFF}, {0xFF,0x9F,0x1C},
+        {0x2E,0xCC,0x71}, {0x3B,0x82,0xF6}, {0xEC,0x4E,0x20},
+        {0x00,0xB4,0xD8}, {0xF7,0x2B,0x85}, {0x90,0xE0,0xEF},
+        {0xFF,0xC8,0xDD}, {0xAD,0xFF,0x2F}, {0xFF,0x7C,0x43},
+        {0xA0,0xC4,0xFF}
+    };
+    return palette[pid % 16];
+}
